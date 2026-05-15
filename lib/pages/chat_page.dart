@@ -48,18 +48,18 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _callAgent(String query) async {
     try {
       final url = await _localStorage.getMcpServerUrl();
-      final uri = Uri.parse('$url/generate_trip');
+      final uri = Uri.parse('$url/chat');
       final response = await http.post(uri,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'prompt': query, 'days': 1, 'style': '快速咨询'}),
-      ).timeout(const Duration(seconds: 60));
+        body: jsonEncode({'query': query}),
+      ).timeout(const Duration(seconds: 30));
 
       String reply;
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        reply = data['itinerary'] ?? '抱歉，AI 没有返回有效回复。';
+        reply = data['reply'] ?? '抱歉，AI 没有返回有效回复。';
       } else {
-        reply = _mockReply(query);
+        reply = _offlineReply(query);
       }
       if (mounted) {
         setState(() {
@@ -72,7 +72,7 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _messages.add({'role': 'assistant', 'content': _mockReply(query)});
+          _messages.add({'role': 'assistant', 'content': _offlineReply(query)});
           _isThinking = false;
         });
         _saveHistory();
@@ -81,7 +81,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  String _mockReply(String query) {
+  String _offlineReply(String query) {
     final tips = [
       '建议提前查看目的地天气，合理搭配衣物。',
       '热门景点建议提前网上购票，避免排队。',

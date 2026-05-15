@@ -282,6 +282,15 @@ class TripResponse(BaseModel):
     tools_used: list = []
 
 
+class ChatRequest(BaseModel):
+    query: str = Field(description="用户聊天消息")
+
+
+class ChatResponse(BaseModel):
+    success: bool
+    reply: str
+
+
 class SearchRequest(BaseModel):
     query: str = Field(description="搜索关键词")
 
@@ -337,6 +346,44 @@ async def generate_trip(request: TripRequest):
     except Exception as e:
         print(f"[ERROR] Agent failed: {e}")
         raise HTTPException(status_code=500, detail=f"AI 生成失败: {str(e)}")
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """AI 聊天助手 —— 简短回答旅游相关问题（天气/人流量/门票/美食等）。"""
+    try:
+        prompt = f"""你是一个专业的 AI 旅游助手，请简洁地回答用户的旅游相关问题。
+
+用户问题: {request.query}
+
+要求：
+- 如果问题涉及具体城市/景点的天气，请使用 weather_tool 查询真实天气数据
+- 如果问题涉及景点搜索/推荐/门票价格/人流量，请使用 amap_search_tool 搜索真实数据
+- 如果问题涉及旅游攻略/注意事项，请使用 bocha_search_tool 搜索
+- 回答要简洁直接，不超过 300 字
+- 如果有人流量相关问题，结合景点评分和评论数给出建议
+- 以友好的语气回复"""
+
+        result = agent.invoke({"messages": [HumanMessage(content=prompt)]})
+        reply = str(result["messages"][-1].content)
+        return ChatResponse(success=True, reply=reply)
+    except Exception as e:
+        print(f"[ERROR] Chat failed: {e}")
+        # 降级到离线回复
+        return ChatResponse(success=False, reply=_offline_reply(request.query))
+
+
+def _offline_reply(query: str) -> str:
+    """离线降级回复"""
+    tips = [
+        "建议提前查看目的地天气，合理搭配衣物。",
+        "热门景点建议提前网上购票，避免排队。",
+        "出行前确认护照和签证有效期。",
+        "建议购买旅游保险，以防意外。",
+    ]
+    import random
+    random.shuffle(tips)
+    return f"当前 AI 后端离线。关于「{query}」的建议：\n\n" + "\n".join(tips[:3])
 
 
 @app.post("/search_places")
