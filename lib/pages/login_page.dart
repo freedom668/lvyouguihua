@@ -16,6 +16,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _isLogin = true;
+  bool _obscurePassword = true;
 
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -329,7 +330,7 @@ class _LoginPageState extends State<LoginPage> {
     return TextField(
       controller: controller,
       focusNode: focusNode,
-      obscureText: isPassword,
+      obscureText: isPassword ? _obscurePassword : false,
       keyboardType: keyboardType,
       style: const TextStyle(color: AppConstants.textPrimary, fontSize: 16),
       decoration: InputDecoration(
@@ -340,6 +341,12 @@ class _LoginPageState extends State<LoginPage> {
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey[400]),
         prefixIcon: Icon(icon, color: isFocused ? AppConstants.primaryColor : Colors.grey[400]),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey[400], size: 22),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              )
+            : null,
         filled: true,
         fillColor: Colors.grey[50],
         enabledBorder: OutlineInputBorder(

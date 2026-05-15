@@ -40,13 +40,17 @@ class _ResultPageState extends State<ResultPage> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (_isFavorited) return;
+    final wasFavorited = _isFavorited;
     setState(() => _favLoading = true);
-    await LocalStorageService().addSavedPlan(_planText, _city, _days);
+    if (wasFavorited) {
+      await LocalStorageService().removeSavedPlan(_planText);
+    } else {
+      await LocalStorageService().addSavedPlan(_planText, _city, _days);
+    }
     if (mounted) {
-      setState(() { _isFavorited = true; _favLoading = false; });
+      setState(() { _isFavorited = !wasFavorited; _favLoading = false; });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已收藏到个人中心'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 1)),
+        SnackBar(content: Text(wasFavorited ? '已取消收藏' : '已收藏到个人中心'), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 1)),
       );
     }
   }

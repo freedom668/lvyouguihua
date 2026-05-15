@@ -241,6 +241,29 @@ class _PromptPageState extends State<PromptPage> {
           ],
         ),
       ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, -3))]),
+        child: BottomNavigationBar(
+          currentIndex: 2,
+          selectedItemColor: AppConstants.primaryColor,
+          unselectedItemColor: Colors.grey[400],
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          onTap: (i) {
+            switch (i) {
+              case 0: Navigator.popUntil(context, ModalRoute.withName('/home')); break;
+              case 1: Navigator.pushNamed(context, '/chat'); break;
+              case 3: Navigator.pushNamed(context, '/profile'); break;
+            }
+          },
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: '首页'),
+            BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'AI 聊天'),
+            BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: 'Prompt'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: '个人'),
+          ],
+        ),
+      ),
     );
   }
 }

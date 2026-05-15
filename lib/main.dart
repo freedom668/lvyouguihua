@@ -7,6 +7,7 @@ import 'pages/detail_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/tools_selection_page.dart';
+import 'pages/chat_page.dart';
 import 'pages/prompt_page.dart';
 import 'pages/edit_profile_page.dart';
 import 'services/local_storage_service.dart';
@@ -84,6 +85,9 @@ class _TravelPlannerAppState extends State<TravelPlannerApp> {
             break;
           case '/tools':
             page = const ToolsSelectionPage();
+            break;
+          case '/chat':
+            page = const ChatPage();
             break;
           case '/prompt':
             page = const PromptPage();

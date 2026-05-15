@@ -168,6 +168,25 @@ class LocalStorageService {
     return plans.length;
   }
 
+  // ========== 聊天历史 ==========
+
+  static const _keyChatHistory = 'chat_history';
+
+  Future<List<Map<String, String>>> getChatHistory() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_keyChatHistory);
+    if (json == null || json.isEmpty) return [];
+    try {
+      final list = jsonDecode(json) as List<dynamic>;
+      return list.map((e) => Map<String, String>.from((e as Map).map((k, v) => MapEntry(k.toString(), v.toString())))).toList();
+    } catch (_) { return []; }
+  }
+
+  Future<void> saveChatHistory(List<Map<String, String>> messages) async {
+    final prefs = await _prefs;
+    await prefs.setString(_keyChatHistory, jsonEncode(messages));
+  }
+
   /// 清除缓存数据（模拟）
   Future<void> clearCache() async {
     // 实际可扩展：清理文件缓存、图片缓存等
