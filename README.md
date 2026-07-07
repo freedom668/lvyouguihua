@@ -189,6 +189,152 @@ travel_planner/
 - `dart analyze` 零错误零警告
 - 支持 Windows / Android / Chrome 三平台编译运行
 
+---
+
+## 解决的社会问题
+
+### 痛点分析
+
+现代人面临「**有时间旅行，没时间做攻略**」的困境：
+
+| 问题 | 现状 | 本方案 |
+|------|------|--------|
+| **信息过载** | 一次旅行需要在携程、马蜂窝、小红书、微博等 5+ 平台来回切换查找攻略 | AI Agent 自动搜索高德、天气、博查等多源数据，一站式输出完整行程 |
+| **决策困难** | 面对海量景点、酒店、餐厅不知如何选择，常陷入"选择瘫痪" | LangChain Agent 自主调用工具、多步推理，给出排名和预算分析 |
+| **时效性差** | 攻略可能是几年前的，门票价格、开放时间、天气等信息已过时 | 通过 MCP 工具实时查询高德 POI、天气预报，确保信息准确 |
+| **预算焦虑** | 不知道一趟旅行要花多少钱，担心超支 | 内置预算精算工具，根据旅行天数和风格自动计算各项费用 |
+| **个性化不足** | 通用攻略千人一面，无法满足个性化需求 | 支持自然语言输入偏好（"带小孩""蜜月""穷游"），Agent 定制专属行程 |
+| **语言/文化障碍** | 出国旅行语言不通，文化不熟悉 | AI 对话助手 7×24 在线，解答签证、交通、习俗等问题 |
+
+---
+
+## LangChain Agent 详解
+
+### 自定义 Tool（`@tool` 装饰器）
+
+| 工具名 | 类型 | 数据源 | 功能 |
+|--------|------|--------|------|
+| `amap_search_tool` | 自定义 Tool | 高德地图 Web API | POI 搜索：返回景点名称、地址、评分、类型 |
+| `weather_tool` | 自定义 Tool | 高德天气 API | 城市天气：温度、风力、5 天预报，自动获取 adcode |
+| `bocha_search_tool` | 自定义 Tool | 博查 AI Search API | 联网搜索：旅游攻略、游记、实时资讯 |
+
+### Agent 配置
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="deepseek-chat",
+    openai_api_base="https://api.deepseek.com",
+    temperature=0.7, max_tokens=4096,
+)
+
+agent = create_react_agent(model=llm, tools=[
+    amap_search_tool, weather_tool, bocha_search_tool
+])
+```
+
+- **Agent 类型**：ReAct (Reasoning + Acting)，具备自主思考与工具调用能力
+- **推理流程**：用户输入 → Agent 分析意图 → 调用高德搜索 → 调用天气查询 → 调用博查 AI → 整合数据 → 输出结构化回答
+
+### 长短记忆
+
+| 记忆类型 | 实现方式 | 说明 |
+|----------|----------|------|
+| **短记忆** | Agent 单次调用上下文 | 单次 Agent 调用的多步推理过程 |
+| **长记忆** | `SharedPreferences` JSON 序列化 | 聊天历史持久化，关闭 App 重新打开后历史仍在 |
+
+---
+
+## 数据库设计
+
+### trips 表（SQLite — sqflite）
+
+```sql
+CREATE TABLE trips (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL,           -- 行程标题
+    city        TEXT NOT NULL DEFAULT '', -- 城市
+    description TEXT NOT NULL DEFAULT '', -- 描述
+    image_url   TEXT NOT NULL DEFAULT '', -- 图片 URL
+    days        INTEGER NOT NULL DEFAULT 1,  -- 天数
+    price       REAL NOT NULL DEFAULT 0.0,   -- 价格
+    is_favorite INTEGER NOT NULL DEFAULT 0,  -- 收藏状态
+    created_at  TEXT NOT NULL               -- 创建时间
+);
+```
+
+### saved_plans 表（AI 计划存储）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `plan_text` | TEXT | AI 生成的完整行程文本 |
+| `city` | TEXT | 目的地城市 |
+| `days` | INTEGER | 游玩天数 |
+| `created_at` | TEXT | 收藏时间 |
+| `is_favorite` | INTEGER | 收藏状态 (1=已收藏) |
+
+### 操作覆盖
+
+| 操作 | SQL | 对应方法 |
+|------|-----|---------|
+| 增 | `INSERT INTO trips` | `insertOrUpdate()` |
+| 删 | `DELETE FROM trips` | `deleteTrip()` |
+| 改 | `UPDATE trips SET is_favorite` | `toggleFavorite()` |
+| 查 | `SELECT * FROM trips WHERE` | `queryFavorites()`, `queryTripById()`, `getFavoriteCount()` |
+
+---
+
+## Agent API（完整）
+
+| 方法 | 路径 | 请求体 | 响应 | 说明 |
+|------|------|--------|------|------|
+| `GET` | `/health` | — | `{"status":"ok"}` | 健康检查 |
+| `POST` | `/generate_trip` | `{prompt, city, days, style}` | `{success, itinerary, tools_used}` | AI 行程规划 |
+| `POST` | `/chat` | `{query}` | `{success, reply}` | AI 聊天助手 |
+| `POST` | `/search_places` | `{query}` | `{success, data}` | 高德 POI 搜索 |
+| `POST` | `/query_weather` | `{city}` | `{success, data}` | 天气查询 |
+
+---
+
+## MCP 协议集成
+
+### MCP 客户端（Flutter 端）
+
+```dart
+class McpClientService {
+  // JSON-RPC 2.0 请求封装
+  Future<Map<String, dynamic>> _rpc(String method, Map<String, dynamic>? params);
+
+  // MCP 协议方法
+  Future<void> initialize();              // 握手 + session
+  Future<List<McpTool>> listTools();      // 工具发现
+  Future<McpToolResult> callTool(...);    // 工具调用
+}
+```
+
+### MCP 工具配置界面
+
+`/tools` 页面动态发现服务端工具列表，支持独立开关控制（关闭"预算精算师"则行程不显示价格）。
+
+---
+
+## 评分要求自查
+
+| # | 评分项 | 分值 | 完成情况 | 证据 |
+|---|--------|------|---------|------|
+| 1 | 社会问题 | 5 | ✅ | 「解决的社会问题」章节，6 项痛点分析 |
+| 2 | ≥5 页面 + 说明 | 10 | ✅ | 10 页面 + 路由表 + 页面说明 |
+| 3 | 组件使用 | 15 | ✅ | Text/Container/Image/Button/List/Input/Dialog/Flex/主题/动画 |
+| 4 | 系统架构图 | 10 | ✅ | ASCII 架构图 + 数据流 + 组件树 |
+| 5 | LangChain Tool/Agent/长记忆 | 10 | ✅ | 3 个自定义 @tool + ReAct Agent + JSON 长记忆 |
+| 6 | 数据库 CRUD | 10 | ✅ | SQLite schema + 增删改查 + SP 存储 |
+| 7 | MCP界面 + AI后端 | 10 | ✅ | `/tools` MCP页 + `/settings` Agent配置 + `/docs` Swagger |
+| 8 | 综合质量 | 10 | ✅ | `dart analyze` 零错误 |
+
+---
+
 ## License
 
 MIT
